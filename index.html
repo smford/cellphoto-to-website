@@ -1,0 +1,335 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+    <title>CellPhoto Studio - P2P Photo Transfer & In-Browser AI Vision</title>
+    <meta name="description" content="Capture photos from computer, webcam, or mobile over encrypted WebRTC DataChannel, and perform face detection, object detection, QR scanning, and color extraction directly in-browser." />
+    <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%233b82f6' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'><path d='M14.5 4h-5L7 7H4a2 2 0 0 0-2 2v9a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V9a2 2 0 0 0-2-2h-3l-2.5-3z'/><circle cx='12' cy='13' r='3'/></svg>" />
+    <link rel="stylesheet" href="./src/styles/main.css" />
+  </head>
+  <body>
+    <!-- DESKTOP / MAIN APP VIEW -->
+    <div id="desktopApp">
+      <header>
+        <div class="brand">
+          <div class="brand-icon">
+            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M14.5 4h-5L7 7H4a2 2 0 0 0-2 2v9a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V9a2 2 0 0 0-2-2h-3l-2.5-3z"/>
+              <circle cx="12" cy="13" r="3"/>
+            </svg>
+          </div>
+          <div>
+            <h1>CellPhoto Studio</h1>
+            <p>P2P Real-Time Acquisition & In-Browser Vision</p>
+          </div>
+        </div>
+
+        <div class="header-badges">
+          <div id="webrtcStatusBadge" class="status-badge">
+            <span class="status-dot"></span>
+            <span id="webrtcStatusText">WebRTC Initializing...</span>
+          </div>
+
+          <a href="https://github.com/smford/cellphoto-to-website" target="_blank" rel="noopener noreferrer" class="btn btn-secondary btn-sm" title="View Source on GitHub">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
+              <path d="M12 0C5.37 0 0 5.37 0 12c0 5.31 3.435 9.795 8.205 11.385.6.105.825-.255.825-.57 0-.285-.015-1.23-.015-2.235-3.015.555-3.795-.735-4.035-1.41-.135-.345-.72-1.41-1.23-1.695-.42-.225-1.02-.78-.015-.795.945-.015 1.62.87 1.845 1.23 1.08 1.815 2.805 1.305 3.495.99.105-.78.42-1.305.765-1.605-2.67-.3-5.46-1.335-5.46-5.925 0-1.305.465-2.385 1.23-3.225-.12-.3-.54-1.53.12-3.18 0 0 1.005-.315 3.3 1.23.96-.27 1.98-.405 3-.405s2.04.135 3 .405c2.295-1.56 3.3-1.23 3.3-1.23.66 1.65.24 2.88.12 3.18.765.84 1.23 1.905 1.23 3.225 0 4.605-2.805 5.625-5.475 5.925.435.375.81 1.095.81 2.22 0 1.605-.015 2.895-.015 3.3 0 .315.225.69.825.57A12.02 12.02 0 0024 12c0-6.63-5.37-12-12-12z"/>
+            </svg>
+            GitHub
+          </a>
+        </div>
+      </header>
+
+      <main>
+        <!-- SECTION 1: PHOTO SOURCE SELECTION (VISIBLE INITIALLY) -->
+        <section id="sourceSelectionSection">
+          <div class="hero-section">
+            <h2 class="hero-title">Bring a Photo into Your Browser</h2>
+            <p class="hero-subtitle">
+              Choose one of three methods to provide a photo. All detections run 100% locally in-browser with zero server-side processing.
+            </p>
+          </div>
+
+          <div class="source-grid">
+            <!-- OPTION 1: UPLOAD FROM COMPUTER -->
+            <div class="source-card">
+              <span class="source-badge">Option 1</span>
+              <div class="source-icon-wrap">
+                <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                  <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+                  <polyline points="17 8 12 3 7 8"/>
+                  <line x1="12" y1="3" x2="12" y2="15"/>
+                </svg>
+              </div>
+              <h3 class="source-title">Upload from Computer</h3>
+              <p class="source-desc">
+                Select an image file, drag & drop directly, or paste from clipboard (Ctrl+V / Cmd+V).
+              </p>
+              
+              <div id="dropzone" class="dropzone">
+                <input type="file" id="fileInput" accept="image/*" style="display: none;" />
+                <button type="button" class="btn btn-secondary btn-sm" id="btnBrowseFile">
+                  Browse Image Files
+                </button>
+                <p style="font-size: 0.75rem; color: var(--text-muted); margin-top: 0.5rem;">
+                  JPG, PNG, WebP, AVIF, HEIC
+                </p>
+              </div>
+            </div>
+
+            <!-- OPTION 2: TAKE WITH COMPUTER CAMERA -->
+            <div class="source-card">
+              <span class="source-badge">Option 2</span>
+              <div class="source-icon-wrap">
+                <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                  <path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/>
+                  <circle cx="12" cy="13" r="4"/>
+                </svg>
+              </div>
+              <h3 class="source-title">Computer Camera</h3>
+              <p class="source-desc">
+                Take a photo directly with your computer's built-in webcam or external USB camera.
+              </p>
+              <button type="button" class="btn btn-primary" id="btnOpenWebcam">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                  <path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/>
+                  <circle cx="12" cy="13" r="4"/>
+                </svg>
+                Launch Webcam
+              </button>
+            </div>
+
+            <!-- OPTION 3: SCAN QR CODE WITH PHONE/TABLET (WEBRTC P2P) -->
+            <div class="source-card" style="border-color: rgba(59, 130, 246, 0.4);">
+              <span class="source-badge" style="background: rgba(139, 92, 246, 0.2); color: #c084fc;">Option 3: P2P</span>
+              <div class="source-icon-wrap" style="color: #a78bfa;">
+                <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                  <rect x="3" y="3" width="7" height="7"/>
+                  <rect x="14" y="3" width="7" height="7"/>
+                  <rect x="14" y="14" width="7" height="7"/>
+                  <rect x="3" y="14" width="7" height="7"/>
+                </svg>
+              </div>
+              <h3 class="source-title">Phone / Tablet Camera</h3>
+              <p class="source-desc">
+                Scan with your phone's camera. Photos transfer <strong>peer-to-peer</strong> in real-time over an encrypted WebRTC DataChannel!
+              </p>
+
+              <div class="qr-container">
+                <canvas id="qrCanvas"></canvas>
+              </div>
+
+              <div class="qr-status-indicator" id="qrStatusText">
+                <span class="status-dot" style="background: #f59e0b;"></span>
+                Waiting for mobile device...
+              </div>
+
+              <div style="display: flex; gap: 0.5rem; margin-top: 0.75rem;">
+                <button type="button" class="btn btn-secondary btn-sm" id="btnCopyP2PLink">
+                  Copy Mobile Link
+                </button>
+                <button type="button" class="btn btn-secondary btn-sm" id="btnOpenMobileTest" title="Open in another tab to test">
+                  Test Tab
+                </button>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <!-- SECTION 2: PHOTO DETECTION & INSPECTION STUDIO (VISIBLE WHEN PHOTO LOADED) -->
+        <section id="studioSection" class="studio-view" style="display: none;">
+          <div class="studio-topbar">
+            <div class="studio-topbar-left">
+              <button type="button" class="btn btn-secondary btn-sm" id="btnNewPhoto">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                  <polyline points="15 18 9 12 15 6"/>
+                </svg>
+                Take / Choose Another Photo
+              </button>
+              <button type="button" class="btn btn-secondary btn-sm" id="btnResetFilters">
+                Reset to Original
+              </button>
+            </div>
+
+            <div class="studio-topbar-right">
+              <span id="photoDimensionBadge" class="status-badge">1920 × 1080</span>
+              <button type="button" class="btn btn-primary btn-sm" id="btnDownloadPhoto">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                  <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+                  <polyline points="7 10 12 15 17 10"/>
+                  <line x1="12" y1="15" x2="12" y2="3"/>
+                </svg>
+                Download Photo
+              </button>
+            </div>
+          </div>
+
+          <div class="studio-layout">
+            <!-- CANVAS VIEWPORT -->
+            <div class="canvas-wrapper">
+              <canvas id="photoCanvas"></canvas>
+              <div id="canvasLoadingSpinner" class="canvas-loading-spinner" style="display: none;">
+                <div class="spinner"></div>
+                <p id="canvasLoadingText" style="font-size: 0.9rem; font-weight: 600;">Running in-browser detection...</p>
+              </div>
+            </div>
+
+            <!-- DETECTION SIDEBAR -->
+            <div class="detection-sidebar">
+              <!-- PRIMARY: FACE DETECTION -->
+              <div class="sidebar-card" style="border-color: rgba(59, 130, 246, 0.4);">
+                <div class="sidebar-card-header">
+                  <div class="sidebar-card-title" style="color: #60a5fa;">
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                      <circle cx="12" cy="12" r="10"/>
+                      <path d="M8 14s1.5 2 4 2 4-2 4-2"/>
+                      <line x1="9" y1="9" x2="9.01" y2="9"/>
+                      <line x1="15" y1="9" x2="15.01" y2="9"/>
+                    </svg>
+                    Face Detection
+                  </div>
+                  <span id="faceCountBadge" class="feature-count-badge">0</span>
+                </div>
+
+                <div class="feature-btn-grid">
+                  <button type="button" class="feature-btn active" id="btnDetectFace">
+                    <div class="feature-btn-content">
+                      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="9"/></svg>
+                      Draw Face Reticle & Circles
+                    </div>
+                  </button>
+
+                  <button type="button" class="feature-btn" id="btnPrivacyBlur">
+                    <div class="feature-btn-content">
+                      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
+                      Privacy Blur (Pixelate Faces)
+                    </div>
+                  </button>
+                </div>
+              </div>
+
+              <!-- OTHER IN-BROWSER DETECTION FEATURES -->
+              <div class="sidebar-card">
+                <div class="sidebar-card-header">
+                  <div class="sidebar-card-title">
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="12 2 2 7 12 12 22 7 12 2"/><polyline points="2 17 12 22 22 17"/><polyline points="2 12 12 17 22 12"/></svg>
+                    In-Browser Vision Suite
+                  </div>
+                </div>
+
+                <div class="feature-btn-grid">
+                  <!-- QR & BARCODES -->
+                  <button type="button" class="feature-btn" id="btnDetectQR">
+                    <div class="feature-btn-content">
+                      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/></svg>
+                      Decode Barcodes & QR Codes
+                    </div>
+                  </button>
+
+                  <!-- OBJECT DETECTION -->
+                  <button type="button" class="feature-btn" id="btnDetectObjects">
+                    <div class="feature-btn-content">
+                      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"/><line x1="3" y1="9" x2="21" y2="9"/><line x1="9" y1="21" x2="9" y2="9"/></svg>
+                      Detect Common Objects
+                    </div>
+                  </button>
+
+                  <!-- PALETTE EXTRACTION -->
+                  <button type="button" class="feature-btn" id="btnExtractPalette">
+                    <div class="feature-btn-content">
+                      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="13.5" cy="6.5" r=".5" fill="currentColor"/><circle cx="17.5" cy="10.5" r=".5" fill="currentColor"/><circle cx="8.5" cy="7.5" r=".5" fill="currentColor"/><circle cx="6.5" cy="12.5" r=".5" fill="currentColor"/><path d="M12 2C6.5 2 2 6.5 2 12s4.5 10 10 10c.926 0 1.648-.746 1.648-1.688 0-.437-.18-.835-.437-1.125-.29-.289-.438-.652-.438-1.125a1.64 1.64 0 0 1 1.668-1.668h1.996c3.051 0 5.563-2.512 5.563-5.563C22 6.5 17.5 2 12 2z"/></svg>
+                      Dominant Color Palette
+                    </div>
+                  </button>
+
+                  <!-- DOCUMENT SCAN / SOBEL FILTER -->
+                  <button type="button" class="feature-btn" id="btnDocumentScan">
+                    <div class="feature-btn-content">
+                      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/><polyline points="10 9 9 9 8 9"/></svg>
+                      Document Scan & Sobel Filter
+                    </div>
+                  </button>
+
+                  <!-- EXIF INSPECTION -->
+                  <button type="button" class="feature-btn" id="btnInspectExif">
+                    <div class="feature-btn-content">
+                      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/></svg>
+                      Inspect EXIF Camera Metadata
+                    </div>
+                  </button>
+                </div>
+              </div>
+
+              <!-- DYNAMIC RESULTS & INSIGHTS PANEL -->
+              <div class="sidebar-card" id="resultsPanelCard" style="display: none;">
+                <div class="sidebar-card-header">
+                  <div class="sidebar-card-title" id="resultsPanelTitle">Detection Results</div>
+                </div>
+                <div id="detectionResultsContainer" class="detection-results"></div>
+              </div>
+            </div>
+          </div>
+        </section>
+      </main>
+
+      <!-- WEBCAM CAPTURE DIALOG -->
+      <dialog id="webcamDialog">
+        <div class="dialog-header">
+          <h3 style="font-size: 1.1rem; font-weight: 700;">Take Photo with Webcam</h3>
+          <button type="button" class="dialog-close" id="btnCloseWebcam">&times;</button>
+        </div>
+        <div class="video-viewfinder-wrap">
+          <video id="webcamVideo" autoplay playsinline muted></video>
+          <div id="countdownOverlay" class="countdown-overlay" style="display: none;"></div>
+        </div>
+        <div class="camera-controls">
+          <button type="button" class="btn btn-secondary" id="btnFlipWebcam">
+            Flip Camera
+          </button>
+          <button type="button" class="btn btn-secondary" id="btnTimerWebcam">
+            ⏱️ 3s Timer
+          </button>
+          <button type="button" class="btn btn-primary" id="btnSnapWebcam">
+            📸 Snap Photo
+          </button>
+        </div>
+      </dialog>
+    </div>
+
+    <!-- MOBILE REMOTE CAMERA VIEW (ACTIVATED VIA ?role=camera) -->
+    <div id="mobileRemoteApp" class="mobile-remote-view" style="display: none;">
+      <div class="remote-header">
+        <div style="display: flex; align-items: center; gap: 0.5rem;">
+          <span class="status-dot" style="background: #10b981;"></span>
+          <span style="font-size: 0.85rem; font-weight: 600;" id="remotePeerStatus">Connecting to Desktop...</span>
+        </div>
+        <button type="button" class="btn btn-secondary btn-sm" id="btnMobileFlipCamera">Flip</button>
+      </div>
+
+      <div class="remote-viewport-container">
+        <video id="mobileCameraVideo" autoplay playsinline muted></video>
+        <div id="mobileTransferOverlay" class="canvas-loading-spinner" style="display: none;">
+          <div class="spinner"></div>
+          <p id="mobileTransferProgress" style="font-weight: 700;">Transferring photo over P2P...</p>
+        </div>
+      </div>
+
+      <div class="remote-footer">
+        <button type="button" class="shutter-btn" id="btnMobileShutter" aria-label="Take Photo">
+          <div class="shutter-btn-inner"></div>
+        </button>
+        <p style="font-size: 0.8rem; color: #94a3b8;">Tap to snap & transfer in real-time</p>
+
+        <label class="btn btn-secondary btn-sm" style="margin-top: 0.5rem; cursor: pointer;">
+          📁 Choose from Camera Roll
+          <input type="file" id="mobileFileInput" accept="image/*" capture="environment" style="display: none;" />
+        </label>
+      </div>
+    </div>
+
+    <!-- TOAST CONTAINER -->
+    <div id="toastContainer"></div>
+
+    <script type="module" src="./src/main.ts"></script>
+  </body>
+</html>

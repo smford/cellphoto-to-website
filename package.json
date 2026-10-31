@@ -1,0 +1,41 @@
+{
+  "name": "cellphoto-to-website",
+  "version": "1.0.0",
+  "description": "Web app to capture/transfer photos via WebRTC and perform client-side in-browser detections.",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc && vite build",
+    "preview": "vite preview",
+    "test": "vitest run",
+    "typecheck": "tsc --noEmit"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/smford/cellphoto-to-website.git"
+  },
+  "keywords": [
+    "webrtc",
+    "in-browser-detection",
+    "face-detection",
+    "p2p",
+    "github-pages"
+  ],
+  "author": "Stephen Ford",
+  "license": "MIT",
+  "dependencies": {
+    "@mediapipe/tasks-vision": "^1.2.0",
+    "exifr": "^7.1.3",
+    "jsqr": "^1.4.0",
+    "lucide": "^1.16.0",
+    "peerjs": "^1.5.5",
+    "qrcode": "^1.5.4"
+  },
+  "devDependencies": {
+    "@types/node": "^22.10.2",
+    "@types/qrcode": "^1.5.5",
+    "typescript": "^5.7.2",
+    "vite": "^6.0.3",
+    "vitest": "^2.1.8"
+  }
+}
