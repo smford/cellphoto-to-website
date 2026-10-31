@@ -148,10 +148,16 @@
                 <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                   <polyline points="15 18 9 12 15 6"/>
                 </svg>
-                Take / Choose Another Photo
+                New Photo
+              </button>
+              <button type="button" class="btn btn-secondary btn-sm" id="btnRotateCCW" title="Rotate 90° Counter-Clockwise">
+                ↺ 90°
+              </button>
+              <button type="button" class="btn btn-secondary btn-sm" id="btnRotateCW" title="Rotate 90° Clockwise">
+                ↻ 90°
               </button>
               <button type="button" class="btn btn-secondary btn-sm" id="btnResetFilters">
-                Reset to Original
+                Reset
               </button>
             </div>
 
@@ -180,6 +186,36 @@
 
             <!-- DETECTION SIDEBAR -->
             <div class="detection-sidebar">
+              <!-- BACKGROUND REMOVAL & CUTOUT -->
+              <div class="sidebar-card" style="border-color: rgba(16, 185, 129, 0.4);">
+                <div class="sidebar-card-header">
+                  <div class="sidebar-card-title" style="color: #34d399;">
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                      <circle cx="12" cy="12" r="10"/>
+                      <path d="m4.93 4.93 14.14 14.14"/>
+                    </svg>
+                    Background Cutout & Stripper
+                  </div>
+                  <span class="source-badge" style="background: rgba(16, 185, 129, 0.2); color: #6ee7b7;">AI Cutout</span>
+                </div>
+
+                <div class="feature-btn-grid">
+                  <button type="button" class="feature-btn" id="btnRemoveBackground">
+                    <div class="feature-btn-content">
+                      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"/><line x1="9" y1="3" x2="9" y2="21"/></svg>
+                      Strip Background (Transparent PNG)
+                    </div>
+                  </button>
+
+                  <button type="button" class="feature-btn" id="btnStudioBackground">
+                    <div class="feature-btn-content">
+                      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M12 2a10 10 0 0 1 10 10"/></svg>
+                      Replace with Studio Backdrop
+                    </div>
+                  </button>
+                </div>
+              </div>
+
               <!-- PRIMARY: FACE DETECTION & ENHANCEMENTS -->
               <div class="sidebar-card" style="border-color: rgba(59, 130, 246, 0.4);">
                 <div class="sidebar-card-header">

@@ -20,10 +20,12 @@ import {
   drawEyePrivacyBar,
   type EyeAnalysisResult,
 } from './services/eyeDetector';
+import { getExifOrientation, renderOrientedImage, rotateCanvas } from './services/imageOrientation';
+import { removeBackground, type BackgroundRemovalMode } from './services/backgroundRemoval';
 
 // UI State
 interface AppState {
-  originalImage: HTMLImageElement | null;
+  originalImage: HTMLImageElement | HTMLCanvasElement | null;
   currentPhotoDataUrl: string | null;
   detectedFaces: DetectedFace[];
   eyeAnalyses: EyeAnalysisResult[];
@@ -33,6 +35,7 @@ interface AppState {
   privacyBlurEnabled: boolean;
   currentARProp: ARPropType;
   currentColorDeficiency: ColorDeficiencyType;
+  backgroundCutoutCanvas: HTMLCanvasElement | null;
 }
 
 const state: AppState = {
@@ -46,6 +49,7 @@ const state: AppState = {
   privacyBlurEnabled: false,
   currentARProp: 'sunglasses',
   currentColorDeficiency: 'deuteranopia',
+  backgroundCutoutCanvas: null,
 };
 
 // Services
@@ -518,26 +522,38 @@ async function loadPhotoIntoStudio(dataUrl: string, sourceFile?: File | Blob) {
   state.currentPhotoDataUrl = dataUrl;
   state.detectedFaces = [];
   state.eyeAnalyses = [];
+  state.backgroundCutoutCanvas = null;
   state.activeFeature = 'faces';
   state.privacyBlurEnabled = false;
+
+  const canvasWrapper = document.querySelector('.canvas-wrapper');
+  canvasWrapper?.classList.remove('checkerboard');
 
   // Show studio view, hide source selection
   sourceSelectionSection.style.display = 'none';
   studioSection.style.display = 'flex';
 
-  // Read EXIF metadata asynchronously
+  // Read EXIF metadata and orientation asynchronously
   extractPhotoMetadata(sourceFile || dataUrl).then((meta) => {
     state.exifData = meta;
   });
+
+  const orientation = await getExifOrientation(sourceFile || dataUrl);
 
   // Load image onto Canvas
   const img = new Image();
   img.crossOrigin = 'anonymous';
   img.onload = async () => {
-    state.originalImage = img;
+    // Automatically apply EXIF orientation so image matches how picture was taken
+    if (orientation > 1) {
+      state.originalImage = renderOrientedImage(img, orientation);
+      showToast(`Automatically oriented photo (EXIF Tag: ${orientation})`);
+    } else {
+      state.originalImage = img;
+    }
 
-    photoCanvas.width = img.naturalWidth || img.width;
-    photoCanvas.height = img.naturalHeight || img.height;
+    photoCanvas.width = state.originalImage.width;
+    photoCanvas.height = state.originalImage.height;
 
     const dimBadge = document.getElementById('photoDimensionBadge');
     if (dimBadge) {
@@ -614,6 +630,12 @@ async function runFaceDetection() {
  * Redraws canvas according to active filters & features
  */
 function redrawCanvas() {
+  if (state.activeFeature === 'background' && state.backgroundCutoutCanvas) {
+    canvasCtx.clearRect(0, 0, photoCanvas.width, photoCanvas.height);
+    canvasCtx.drawImage(state.backgroundCutoutCanvas, 0, 0);
+    return;
+  }
+
   renderOriginalCanvas();
 
   // If privacy blur enabled, blur faces first
@@ -689,11 +711,163 @@ function setupStudioInteractions() {
   btnResetFilters.addEventListener('click', () => {
     state.activeFeature = null;
     state.privacyBlurEnabled = false;
+    state.backgroundCutoutCanvas = null;
+    document.querySelector('.canvas-wrapper')?.classList.remove('checkerboard');
     btnPrivacyBlur.classList.remove('active');
     btnDetectFace.classList.remove('active');
     btnDetectEyes?.classList.remove('active');
     renderOriginalCanvas();
     showToast('Reset to original photo.');
+  });
+
+  // Manual 90° Image Rotation Handlers
+  const btnRotateCW = document.getElementById('btnRotateCW');
+  const btnRotateCCW = document.getElementById('btnRotateCCW');
+
+  const handleManualRotate = async (dir: 'cw' | 'ccw') => {
+    if (!state.originalImage) return;
+    const tempCanvas = document.createElement('canvas');
+    tempCanvas.width = state.originalImage.width;
+    tempCanvas.height = state.originalImage.height;
+    const tempCtx = tempCanvas.getContext('2d')!;
+    tempCtx.drawImage(state.originalImage, 0, 0);
+
+    const rotated = rotateCanvas(tempCanvas, dir);
+    state.originalImage = rotated;
+    state.backgroundCutoutCanvas = null;
+    document.querySelector('.canvas-wrapper')?.classList.remove('checkerboard');
+
+    photoCanvas.width = rotated.width;
+    photoCanvas.height = rotated.height;
+
+    const dimBadge = document.getElementById('photoDimensionBadge');
+    if (dimBadge) {
+      dimBadge.textContent = `${photoCanvas.width} × ${photoCanvas.height} px`;
+    }
+
+    renderOriginalCanvas();
+    showToast(`Rotated 90° ${dir === 'cw' ? 'clockwise' : 'counter-clockwise'}`);
+
+    // Re-detect faces and features on the new orientation
+    await runFaceDetection();
+  };
+
+  btnRotateCW?.addEventListener('click', () => handleManualRotate('cw'));
+  btnRotateCCW?.addEventListener('click', () => handleManualRotate('ccw'));
+
+  // Feature: Background Removal & Cutout
+  const btnRemoveBackground = document.getElementById('btnRemoveBackground');
+  const btnStudioBackground = document.getElementById('btnStudioBackground');
+  const canvasWrapper = document.querySelector('.canvas-wrapper');
+
+  btnRemoveBackground?.addEventListener('click', async () => {
+    state.activeFeature = 'background';
+    showCanvasLoading('Stripping background in-browser...');
+
+    try {
+      const srcCanvas = document.createElement('canvas');
+      srcCanvas.width = photoCanvas.width;
+      srcCanvas.height = photoCanvas.height;
+      const sCtx = srcCanvas.getContext('2d')!;
+      sCtx.drawImage(state.originalImage!, 0, 0);
+
+      const cutout = await removeBackground(srcCanvas, 'transparent');
+      state.backgroundCutoutCanvas = cutout;
+
+      canvasWrapper?.classList.add('checkerboard');
+      canvasCtx.clearRect(0, 0, photoCanvas.width, photoCanvas.height);
+      canvasCtx.drawImage(cutout, 0, 0);
+
+      showResultsPanel(
+        'Background Stripped (Cutout)',
+        `
+        <div class="result-item" style="text-align: center;">
+          <p style="margin-bottom: 0.5rem; color: #34d399; font-weight: 700;">Foreground subject isolated!</p>
+          <p style="font-size: 0.8rem; color: #94a3b8; margin-bottom: 0.75rem;">
+            Background removed with full alpha transparency. The checkerboard pattern indicates transparent areas.
+          </p>
+          <button class="btn btn-primary btn-sm" id="btnDownloadCutout">
+            Download Transparent PNG
+          </button>
+        </div>
+      `
+      );
+
+      document.getElementById('btnDownloadCutout')?.addEventListener('click', () => {
+        const a = document.createElement('a');
+        a.download = `cutout-${Date.now()}.png`;
+        a.href = photoCanvas.toDataURL('image/png');
+        a.click();
+        showToast('Downloaded transparent PNG cutout!');
+      });
+
+      showToast('Background removed successfully!');
+    } catch (err) {
+      console.error(err);
+      showToast('Background removal failed: ' + (err as Error).message);
+    } finally {
+      hideCanvasLoading();
+    }
+  });
+
+  btnStudioBackground?.addEventListener('click', async () => {
+    state.activeFeature = 'background_studio';
+    canvasWrapper?.classList.remove('checkerboard');
+    showCanvasLoading('Applying studio backdrop...');
+
+    try {
+      const srcCanvas = document.createElement('canvas');
+      srcCanvas.width = photoCanvas.width;
+      srcCanvas.height = photoCanvas.height;
+      const sCtx = srcCanvas.getContext('2d')!;
+      sCtx.drawImage(state.originalImage!, 0, 0);
+
+      const applyBackdrop = async (mode: BackgroundRemovalMode, label: string) => {
+        showCanvasLoading(`Rendering ${label}...`);
+        const resultCanvas = await removeBackground(srcCanvas, mode);
+        canvasCtx.clearRect(0, 0, photoCanvas.width, photoCanvas.height);
+        canvasCtx.drawImage(resultCanvas, 0, 0);
+        hideCanvasLoading();
+        showToast(`Applied ${label}!`);
+      };
+
+      await applyBackdrop('white', 'Studio White Backdrop');
+
+      const studioOptions: { id: BackgroundRemovalMode; label: string; desc: string }[] = [
+        { id: 'white', label: 'Studio White', desc: 'Clean high-key white e-commerce / passport backdrop' },
+        { id: 'charcoal', label: 'Studio Charcoal', desc: 'Modern dark slate backdrop (#1a202c)' },
+        { id: 'neon_blue', label: 'Cyberpunk Blue', desc: 'Vibrant studio blue backdrop (#2563eb)' },
+      ];
+
+      const html = `
+        <p style="margin-bottom: 0.5rem;">Choose a studio backdrop color:</p>
+        <div style="display: flex; flex-direction: column; gap: 0.4rem;">
+          ${studioOptions
+            .map(
+              (opt) => `
+            <button class="btn btn-secondary btn-sm" style="text-align: left; justify-content: flex-start; display: block;" id="bg_${opt.id}">
+              <strong>${opt.label}</strong>
+              <div style="font-size: 0.7rem; color: #94a3b8;">${opt.desc}</div>
+            </button>
+          `
+            )
+            .join('')}
+        </div>
+      `;
+
+      showResultsPanel('Studio Backdrop Replacement', html);
+
+      studioOptions.forEach((opt) => {
+        document.getElementById(`bg_${opt.id}`)?.addEventListener('click', () => {
+          applyBackdrop(opt.id, opt.label);
+        });
+      });
+    } catch (err) {
+      console.error(err);
+      showToast('Backdrop failed: ' + (err as Error).message);
+    } finally {
+      hideCanvasLoading();
+    }
   });
 
   btnDownloadPhoto.addEventListener('click', () => {

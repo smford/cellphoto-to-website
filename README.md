@@ -24,7 +24,14 @@
 
 ### 2. In-Browser Computer Vision & Detection Showcase
 All detections run **100% locally on the client machine** using WebAssembly, WebGL, and browser APIs:
-- 👁️ **Biometric Eye Detection & Tracking** *(New)*:
+- ✂️ **AI Background Removal & Cutout** *(New)*:
+  - Isolates foreground subjects using MediaPipe neural segmentation running in WebAssembly.
+  - Strips out background with full alpha transparency (transparent PNG download with checkerboard preview).
+  - Studio color backdrop replacements: **Studio White**, **Studio Charcoal**, and **Cyberpunk Blue**.
+- 🔄 **Automatic Orientation Normalization & Studio Rotation** *(New)*:
+  - Automatically reads EXIF Orientation tags (1..8) to rotate photos taken on smartphones in vertical portrait mode or upside-down.
+  - Interactive topbar controls: ↺ 90° CCW and ↻ 90° CW rotation buttons.
+- 👁️ **Biometric Eye Detection & Tracking**:
   - Isolate pupil/iris coordinates for both eyes.
   - Calculates **Inter-pupillary distance (IPD)** in pixels and horizontal eye tilt roll angle.
   - Analyzes eye openness state (*Both Eyes Open*, *Winking*, *Closed / Squinting*).
