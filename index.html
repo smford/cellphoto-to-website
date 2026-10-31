@@ -2,9 +2,13 @@
 <html lang="en">
   <head>
     <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
     <title>CellPhoto Studio - P2P Photo Transfer & In-Browser AI Vision</title>
     <meta name="description" content="Capture photos from computer, webcam, or mobile over encrypted WebRTC DataChannel, and perform face detection, object detection, QR scanning, and color extraction directly in-browser." />
+    <meta name="mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+    <meta name="theme-color" content="#0b0f19" />
     <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%233b82f6' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'><path d='M14.5 4h-5L7 7H4a2 2 0 0 0-2 2v9a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V9a2 2 0 0 0-2-2h-3l-2.5-3z'/><circle cx='12' cy='13' r='3'/></svg>" />
     <link rel="stylesheet" href="./src/styles/main.css" />
   </head>
@@ -342,59 +346,79 @@
       </dialog>
     </div>
 
-    <!-- MOBILE REMOTE CAMERA VIEW (ACTIVATED VIA ?role=camera) -->
+    <!-- MOBILE REMOTE CAMERA VIEW (FULLSCREEN IMMERSIVE OVERLAY) -->
     <div id="mobileRemoteApp" class="mobile-remote-view" style="display: none;">
-      <div class="remote-header">
-        <div style="display: flex; align-items: center; gap: 0.5rem;">
+      <!-- Fullscreen Live Video Stream -->
+      <video id="mobileCameraVideo" autoplay playsinline muted></video>
+
+      <!-- Instant Camera Shutter Flash -->
+      <div id="cameraFlashOverlay" class="camera-flash"></div>
+
+      <!-- Center Focus Reticle -->
+      <div class="camera-reticle">
+        <div class="reticle-box"></div>
+      </div>
+
+      <!-- Top Header Overlay -->
+      <div class="remote-header-overlay">
+        <div class="remote-status-pill">
           <span class="status-dot" style="background: #10b981;"></span>
-          <span style="font-size: 0.85rem; font-weight: 600;" id="remotePeerStatus">Connecting to Desktop...</span>
+          <span id="remotePeerStatus">Connecting to Desktop...</span>
         </div>
-        <!-- Active Camera Indicator Pill (Clickable to switch!) -->
-        <button type="button" class="status-badge" id="btnMobileCameraPill" style="cursor: pointer; background: rgba(59, 130, 246, 0.2); border-color: #3b82f6; color: #93c5fd;">
-          <span id="mobileCameraLabel">📸 Rear Camera</span>
+
+        <div style="display: flex; gap: 0.5rem; align-items: center;">
+          <!-- Camera Switcher Pill (Tap to flip) -->
+          <button type="button" class="remote-pill-btn" id="btnMobileCameraPill" title="Tap to switch camera">
+            <span id="mobileCameraLabel">📸 Rear Camera</span>
+          </button>
+
+          <!-- Fullscreen Toggle Button -->
+          <button type="button" class="remote-pill-btn" id="btnMobileFullscreen" title="Toggle Fullscreen" style="padding: 0.45rem 0.6rem;">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M8 3H5a2 2 0 0 0-2 2v3m18 0V5a2 2 0 0 0-2-2h-3m0 18h3a2 2 0 0 0 2-2v-3M3 16v3a2 2 0 0 0 2 2h3"/>
+            </svg>
+          </button>
+        </div>
+      </div>
+
+      <!-- Transfer Overlay -->
+      <div id="mobileTransferOverlay" class="canvas-loading-spinner" style="display: none;">
+        <div class="spinner"></div>
+        <p id="mobileTransferProgress" style="font-size: 1.1rem; font-weight: 700; color: white;">Transferring photo over P2P...</p>
+      </div>
+
+      <!-- Bottom Floating Controls Overlay -->
+      <div class="remote-footer-overlay">
+        <!-- Flip Camera Button (Bigger: 64px) -->
+        <button type="button" class="control-bubble-btn" id="btnMobileFlipCamera" aria-label="Switch Rear/Front Camera">
+          <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M11 19H4a2 2 0 0 1-2-2V7a2 2 0 0 1 2-2h5"/>
+            <path d="M13 5h7a2 2 0 0 1 2 2v10a2 2 0 0 1-2 2h-5"/>
+            <circle cx="12" cy="12" r="3"/>
+            <path d="m18 22-3-3 3-3"/>
+            <path d="m6 2 3 3-3 3"/>
+          </svg>
+          <span>Flip</span>
         </button>
-      </div>
 
-      <div class="remote-viewport-container">
-        <video id="mobileCameraVideo" autoplay playsinline muted></video>
-        <div id="mobileTransferOverlay" class="canvas-loading-spinner" style="display: none;">
-          <div class="spinner"></div>
-          <p id="mobileTransferProgress" style="font-weight: 700;">Transferring photo over P2P...</p>
-        </div>
-      </div>
+        <!-- Giant Shutter Button (90px) -->
+        <button type="button" class="shutter-btn-large" id="btnMobileShutter" aria-label="Take Photo">
+          <div class="shutter-ring">
+            <div class="shutter-core"></div>
+          </div>
+          <span class="shutter-label">SNAP</span>
+        </button>
 
-      <div class="remote-footer">
-        <div style="display: flex; align-items: center; justify-content: center; gap: 1.5rem; width: 100%;">
-          <!-- Flip Camera Button on Bottom Bar (Prominent & Easy to Tap) -->
-          <button type="button" class="btn btn-secondary btn-pill" id="btnMobileFlipCamera" style="width: 52px; height: 52px; padding: 0;" aria-label="Switch Rear/Front Camera" title="Switch Rear/Front Camera">
-            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-              <path d="M11 19H4a2 2 0 0 1-2-2V7a2 2 0 0 1 2-2h5"/>
-              <path d="M13 5h7a2 2 0 0 1 2 2v10a2 2 0 0 1-2 2h-5"/>
-              <circle cx="12" cy="12" r="3"/>
-              <path d="m18 22-3-3 3-3"/>
-              <path d="m6 2 3 3-3 3"/>
-            </svg>
-          </button>
-
-          <!-- Main Shutter Button -->
-          <button type="button" class="shutter-btn" id="btnMobileShutter" aria-label="Take Photo">
-            <div class="shutter-btn-inner"></div>
-          </button>
-
-          <!-- Camera Roll Picker Button -->
-          <label class="btn btn-secondary btn-pill" style="width: 52px; height: 52px; padding: 0; display: flex; align-items: center; justify-content: center; cursor: pointer;" title="Choose from Photo Library">
-            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-              <rect x="3" y="3" width="18" height="18" rx="2" ry="2"/>
-              <circle cx="8.5" cy="8.5" r="1.5"/>
-              <polyline points="21 15 16 10 5 21"/>
-            </svg>
-            <input type="file" id="mobileFileInput" accept="image/*" capture="environment" style="display: none;" />
-          </label>
-        </div>
-
-        <p style="font-size: 0.8rem; color: #94a3b8; margin-top: 0.25rem;">
-          Tap center to snap, or left to flip camera
-        </p>
+        <!-- Choose from Camera Roll (Bigger: 64px) -->
+        <label class="control-bubble-btn" title="Choose from Photo Library">
+          <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <rect x="3" y="3" width="18" height="18" rx="2" ry="2"/>
+            <circle cx="8.5" cy="8.5" r="1.5"/>
+            <polyline points="21 15 16 10 5 21"/>
+          </svg>
+          <span>Roll</span>
+          <input type="file" id="mobileFileInput" accept="image/*" capture="environment" style="display: none;" />
+        </label>
       </div>
     </div>
 

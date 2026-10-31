@@ -99,14 +99,61 @@ async function initMobileRemoteMode(sessionId: string) {
   const btnMobileShutter = document.getElementById('btnMobileShutter')!;
   const btnMobileFlipCamera = document.getElementById('btnMobileFlipCamera')!;
   const btnMobileCameraPill = document.getElementById('btnMobileCameraPill')!;
+  const btnMobileFullscreen = document.getElementById('btnMobileFullscreen');
   const mobileCameraLabel = document.getElementById('mobileCameraLabel')!;
   const mobileFileInput = document.getElementById('mobileFileInput') as HTMLInputElement;
   const mobileTransferOverlay = document.getElementById('mobileTransferOverlay')!;
   const mobileTransferProgress = document.getElementById('mobileTransferProgress')!;
+  const cameraFlashOverlay = document.getElementById('cameraFlashOverlay');
+
+  // Fullscreen support for tablets and mobile devices
+  const toggleFullscreen = () => {
+    if (!document.fullscreenElement) {
+      if (document.documentElement.requestFullscreen) {
+        document.documentElement.requestFullscreen().catch(() => {});
+      } else if ('webkitRequestFullscreen' in document.documentElement) {
+        // @ts-expect-error iOS Safari Webkit Fullscreen API
+        document.documentElement.webkitRequestFullscreen();
+      }
+    } else {
+      if (document.exitFullscreen) {
+        document.exitFullscreen().catch(() => {});
+      }
+    }
+  };
+
+  btnMobileFullscreen?.addEventListener('click', (e) => {
+    e.stopPropagation();
+    toggleFullscreen();
+  });
+
+  // Attempt fullscreen on first user touch/tap
+  const requestFullscreenOnce = () => {
+    if (!document.fullscreenElement) {
+      if (document.documentElement.requestFullscreen) {
+        document.documentElement.requestFullscreen().catch(() => {});
+      } else if ('webkitRequestFullscreen' in document.documentElement) {
+        // @ts-expect-error iOS Safari Webkit Fullscreen API
+        document.documentElement.webkitRequestFullscreen();
+      }
+    }
+  };
+  window.addEventListener('click', requestFullscreenOnce, { once: true });
+  window.addEventListener('touchstart', requestFullscreenOnce, { once: true });
+
+  const triggerShutterFlash = () => {
+    if (cameraFlashOverlay) {
+      cameraFlashOverlay.classList.add('flash-active');
+      setTimeout(() => cameraFlashOverlay.classList.remove('flash-active'), 120);
+    }
+    if (navigator.vibrate) {
+      navigator.vibrate(40);
+    }
+  };
 
   const updateCameraLabel = (mode: 'user' | 'environment') => {
     if (mode === 'user') {
-      mobileCameraLabel.textContent = '🤳 Front Camera (Selfie)';
+      mobileCameraLabel.textContent = '🤳 Front Camera';
     } else {
       mobileCameraLabel.textContent = '📸 Rear Camera';
     }
@@ -169,6 +216,7 @@ async function initMobileRemoteMode(sessionId: string) {
 
   btnMobileShutter.addEventListener('click', async () => {
     try {
+      triggerShutterFlash();
       const snapshot = cameraManager.captureSnapshot(mobileCameraVideo);
       await sendImage(snapshot);
     } catch (e) {

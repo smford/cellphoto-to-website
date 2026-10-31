@@ -624,69 +624,219 @@ dialog::backdrop {
    MOBILE CAMERA REMOTE VIEW (?role=camera)
    ======================================================== */
 .mobile-remote-view {
-  display: flex;
-  flex-direction: column;
+  position: fixed;
+  inset: 0;
+  width: 100vw;
+  height: 100dvh;
   height: 100vh;
+  overflow: hidden;
   background: #000;
   color: white;
-  padding: 1rem;
-}
-
-.remote-header {
+  z-index: 9999;
   display: flex;
-  justify-content: space-between;
-  align-items: center;
-  padding-bottom: 0.75rem;
+  flex-direction: column;
+  user-select: none;
+  -webkit-user-select: none;
 }
 
-.remote-viewport-container {
-  flex: 1;
-  position: relative;
-  background: #111;
-  border-radius: var(--radius-lg);
-  overflow: hidden;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-}
-
-.remote-viewport-container video {
+#mobileCameraVideo {
+  position: absolute;
+  inset: 0;
   width: 100%;
   height: 100%;
   object-fit: cover;
+  z-index: 1;
 }
 
-.remote-footer {
-  padding-top: 1.25rem;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 1rem;
-}
-
-.shutter-btn {
-  width: 76px;
-  height: 76px;
-  border-radius: 50%;
+/* Shutter Screen Flash */
+.camera-flash {
+  position: absolute;
+  inset: 0;
   background: white;
-  border: 4px solid #3b82f6;
-  box-shadow: 0 0 20px rgba(59, 130, 246, 0.6);
-  cursor: pointer;
+  opacity: 0;
+  pointer-events: none;
+  z-index: 15;
+  transition: opacity 0.15s ease-out;
+}
+
+.camera-flash.flash-active {
+  opacity: 0.85;
+  transition: none;
+}
+
+/* Center Reticle */
+.camera-reticle {
+  position: absolute;
+  inset: 0;
   display: flex;
   align-items: center;
   justify-content: center;
-  transition: transform 0.1s;
+  pointer-events: none;
+  z-index: 5;
 }
 
-.shutter-btn:active {
-  transform: scale(0.92);
+.reticle-box {
+  width: 150px;
+  height: 150px;
+  border: 1.5px dashed rgba(255, 255, 255, 0.45);
+  border-radius: 20px;
+  box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.3);
 }
 
-.shutter-btn-inner {
-  width: 58px;
-  height: 58px;
+/* Top Floating Header Overlay */
+.remote-header-overlay {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  z-index: 20;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: max(16px, env(safe-area-inset-top)) 16px 12px;
+  background: linear-gradient(to bottom, rgba(0, 0, 0, 0.75) 0%, rgba(0, 0, 0, 0.3) 70%, transparent 100%);
+  pointer-events: auto;
+}
+
+.remote-status-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.45rem;
+  padding: 0.45rem 0.85rem;
+  border-radius: var(--radius-full);
+  background: rgba(15, 23, 42, 0.8);
+  backdrop-filter: blur(10px);
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  font-size: 0.8rem;
+  font-weight: 600;
+  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.4);
+}
+
+.remote-pill-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  padding: 0.45rem 0.85rem;
+  border-radius: var(--radius-full);
+  background: rgba(15, 23, 42, 0.8);
+  backdrop-filter: blur(10px);
+  border: 1.5px solid rgba(59, 130, 246, 0.5);
+  color: #93c5fd;
+  font-size: 0.8rem;
+  font-weight: 600;
+  cursor: pointer;
+  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.4);
+  transition: all 0.15s ease;
+  touch-action: manipulation;
+}
+
+.remote-pill-btn:active {
+  transform: scale(0.93);
+  background: rgba(59, 130, 246, 0.3);
+  border-color: #3b82f6;
+}
+
+/* Bottom Floating Controls Overlay */
+.remote-footer-overlay {
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  z-index: 20;
+  display: flex;
+  align-items: center;
+  justify-content: space-around;
+  padding: 16px 24px max(28px, env(safe-area-inset-bottom));
+  background: linear-gradient(to top, rgba(0, 0, 0, 0.88) 0%, rgba(0, 0, 0, 0.45) 60%, transparent 100%);
+  pointer-events: auto;
+}
+
+.shutter-btn-large {
+  width: 92px;
+  height: 92px;
+  border-radius: 50%;
+  background: none;
+  border: none;
+  cursor: pointer;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  position: relative;
+  transition: transform 0.1s ease;
+  touch-action: manipulation;
+}
+
+.shutter-ring {
+  width: 78px;
+  height: 78px;
+  border-radius: 50%;
+  border: 4px solid white;
+  padding: 4px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: 0 0 20px rgba(0, 0, 0, 0.7);
+  background: rgba(255, 255, 255, 0.18);
+  backdrop-filter: blur(6px);
+}
+
+.shutter-core {
+  width: 100%;
+  height: 100%;
   border-radius: 50%;
   background: #3b82f6;
+  transition: transform 0.1s ease, background 0.1s ease;
+}
+
+.shutter-btn-large:active {
+  transform: scale(0.94);
+}
+
+.shutter-btn-large:active .shutter-core {
+  transform: scale(0.88);
+  background: #60a5fa;
+}
+
+.shutter-label {
+  font-size: 0.7rem;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  color: white;
+  margin-top: 3px;
+  text-shadow: 0 1px 4px rgba(0, 0, 0, 0.9);
+}
+
+.control-bubble-btn {
+  width: 66px;
+  height: 66px;
+  border-radius: 50%;
+  background: rgba(15, 23, 42, 0.75);
+  backdrop-filter: blur(12px);
+  border: 1.5px solid rgba(255, 255, 255, 0.28);
+  color: white;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.5);
+  transition: transform 0.15s ease, background 0.15s ease, border-color 0.15s ease;
+  touch-action: manipulation;
+}
+
+.control-bubble-btn:active {
+  transform: scale(0.92);
+  background: rgba(59, 130, 246, 0.4);
+  border-color: #3b82f6;
+}
+
+.control-bubble-btn span {
+  font-size: 0.65rem;
+  font-weight: 800;
+  margin-top: 2px;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
 }
 
 /* Animations */
