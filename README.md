@@ -16,12 +16,19 @@
 - **Computer Webcam**: Integrated camera viewfinder with front/back camera flipping, 3-second countdown timer, and snapshot capture.
 - **Phone / Tablet Remote (WebRTC P2P DataChannel)**:
   - Generates a QR code containing an encrypted room session.
-  - Scanning the QR code on a mobile device or tablet opens a dedicated touch-friendly mobile camera remote.
+  - Scanning the QR code on a mobile device or tablet opens an immersive, fullscreen camera remote.
+  - **Dynamic Visual Viewport Tracking (`window.visualViewport`)**: Real-time compensation for mobile address bars and OS navigation bars (Android 3-button bar / gesture pill, iOS Home Indicator), completely eliminating scrolling and accidental button clipping.
+  - **Proportionate Responsive Touch Controls (`clamp` & `vmin`)**: Touch buttons automatically scale to display size and DPI, providing comfortable, large touch targets on high-res phones and tablets.
   - **Front / Rear Camera Switching**: Easily toggle between the Rear Camera and Front / Selfie Camera directly from the bottom control bar or the header status pill, with automatic selfie mirror preview.
   - Photos are chunked and transmitted in real-time directly over an encrypted WebRTC SCTP DataChannel (DTLS-SRTP end-to-end encrypted) straight onto your desktop canvas. No photos touch any server or cloud storage!
 
 ### 2. In-Browser Computer Vision & Detection Showcase
 All detections run **100% locally on the client machine** using WebAssembly, WebGL, and browser APIs:
+- 👁️ **Biometric Eye Detection & Tracking** *(New)*:
+  - Isolate pupil/iris coordinates for both eyes.
+  - Calculates **Inter-pupillary distance (IPD)** in pixels and horizontal eye tilt roll angle.
+  - Analyzes eye openness state (*Both Eyes Open*, *Winking*, *Closed / Squinting*).
+  - Toggles: **Cybernetic Biometric Reticles & Crosshairs**, **Glowing Neon Irises**, and **Eye Privacy Censor Bar**.
 - 🎯 **Face Detection & Circular Reticles**:
   - Automatically identifies faces using MediaPipe Tasks Vision and the native Shape Detection API.
   - Draws glowing circular reticles and boundary circles around discovered faces with confidence metrics and key landmark points (eyes, nose, mouth).

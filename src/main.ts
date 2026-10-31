@@ -13,12 +13,21 @@ import { applyPortraitBokeh } from './services/portraitBokeh';
 import { drawARProps, type ARPropType } from './services/arProps';
 import { calculateAvatarCrop } from './services/smartCrop';
 import { detectTextRegions } from './services/textDetector';
+import {
+  analyzeEyes,
+  drawEyeBiometricReticles,
+  drawGlowingIrises,
+  drawEyePrivacyBar,
+  type EyeAnalysisResult,
+} from './services/eyeDetector';
 
 // UI State
 interface AppState {
   originalImage: HTMLImageElement | null;
   currentPhotoDataUrl: string | null;
   detectedFaces: DetectedFace[];
+  eyeAnalyses: EyeAnalysisResult[];
+  eyeRenderMode: 'reticles' | 'glowing_iris' | 'privacy_bar';
   exifData: PhotoMetadata | null;
   activeFeature: string | null;
   privacyBlurEnabled: boolean;
@@ -30,6 +39,8 @@ const state: AppState = {
   originalImage: null,
   currentPhotoDataUrl: null,
   detectedFaces: [],
+  eyeAnalyses: [],
+  eyeRenderMode: 'reticles',
   exifData: null,
   activeFeature: 'faces',
   privacyBlurEnabled: false,
@@ -90,7 +101,32 @@ if (userRole === 'camera' && targetSession) {
 // --------------------------------------------------------------------------
 // 2. MOBILE REMOTE CAMERA MODE (With Rear / Front Camera Switch)
 // --------------------------------------------------------------------------
+function setupMobileViewportObserver() {
+  const applyViewport = () => {
+    const vv = window.visualViewport;
+    const width = vv ? vv.width : window.innerWidth;
+    const height = vv ? vv.height : window.innerHeight;
+    const offsetTop = vv ? vv.offsetTop : 0;
+
+    document.documentElement.style.setProperty('--app-viewport-width', `${width}px`);
+    document.documentElement.style.setProperty('--app-viewport-height', `${height}px`);
+    document.documentElement.style.setProperty('--app-viewport-top', `${offsetTop}px`);
+  };
+
+  applyViewport();
+  window.visualViewport?.addEventListener('resize', applyViewport);
+  window.visualViewport?.addEventListener('scroll', applyViewport);
+  window.addEventListener('resize', applyViewport);
+  window.addEventListener('orientationchange', () => {
+    setTimeout(applyViewport, 120);
+  });
+}
+
 async function initMobileRemoteMode(sessionId: string) {
+  document.body.classList.add('mobile-camera-active');
+  document.documentElement.classList.add('mobile-camera-active');
+  setupMobileViewportObserver();
+
   desktopApp.style.display = 'none';
   mobileRemoteApp.style.display = 'flex';
 
@@ -481,6 +517,7 @@ function setupWebcamSource() {
 async function loadPhotoIntoStudio(dataUrl: string, sourceFile?: File | Blob) {
   state.currentPhotoDataUrl = dataUrl;
   state.detectedFaces = [];
+  state.eyeAnalyses = [];
   state.activeFeature = 'faces';
   state.privacyBlurEnabled = false;
 
@@ -597,6 +634,17 @@ function redrawCanvas() {
   if (state.activeFeature === 'ar_props' && state.detectedFaces.length > 0) {
     drawARProps(canvasCtx, state.detectedFaces, state.currentARProp);
   }
+
+  // Draw Eye Detection if active
+  if (state.activeFeature === 'eyes' && state.eyeAnalyses.length > 0) {
+    if (state.eyeRenderMode === 'reticles') {
+      drawEyeBiometricReticles(canvasCtx, state.eyeAnalyses);
+    } else if (state.eyeRenderMode === 'glowing_iris') {
+      drawGlowingIrises(canvasCtx, state.eyeAnalyses, '#06b6d4');
+    } else if (state.eyeRenderMode === 'privacy_bar') {
+      drawEyePrivacyBar(canvasCtx, state.eyeAnalyses);
+    }
+  }
 }
 
 function showResultsPanel(title: string, htmlContent: string) {
@@ -618,6 +666,7 @@ function setupStudioInteractions() {
   const btnDownloadPhoto = document.getElementById('btnDownloadPhoto')!;
 
   const btnDetectFace = document.getElementById('btnDetectFace')!;
+  const btnDetectEyes = document.getElementById('btnDetectEyes');
   const btnPrivacyBlur = document.getElementById('btnPrivacyBlur')!;
   const btnARProps = document.getElementById('btnARProps')!;
   const btnSmartCrop = document.getElementById('btnSmartCrop')!;
@@ -642,6 +691,7 @@ function setupStudioInteractions() {
     state.privacyBlurEnabled = false;
     btnPrivacyBlur.classList.remove('active');
     btnDetectFace.classList.remove('active');
+    btnDetectEyes?.classList.remove('active');
     renderOriginalCanvas();
     showToast('Reset to original photo.');
   });
@@ -657,11 +707,89 @@ function setupStudioInteractions() {
   // Feature: Face Circles
   btnDetectFace.addEventListener('click', async () => {
     state.activeFeature = 'faces';
+    btnDetectEyes?.classList.remove('active');
     btnDetectFace.classList.add('active');
     if (state.detectedFaces.length === 0) {
       await runFaceDetection();
     } else {
       redrawCanvas();
+    }
+  });
+
+  // Feature: Biometric Eye Detection & Tracking
+  btnDetectEyes?.addEventListener('click', async () => {
+    state.activeFeature = 'eyes';
+    btnDetectFace.classList.remove('active');
+    btnDetectEyes.classList.add('active');
+
+    if (state.detectedFaces.length === 0) {
+      showCanvasLoading('Detecting faces and eye coordinates...');
+      try {
+        state.detectedFaces = await detectFaces(state.originalImage!);
+        const faceCountBadge = document.getElementById('faceCountBadge')!;
+        faceCountBadge.textContent = String(state.detectedFaces.length);
+      } finally {
+        hideCanvasLoading();
+      }
+    }
+
+    renderOriginalCanvas();
+    state.eyeAnalyses = analyzeEyes(state.detectedFaces, canvasCtx);
+    redrawCanvas();
+
+    if (state.eyeAnalyses.length > 0) {
+      showToast(`Analyzed eyes on ${state.eyeAnalyses.length} face(s)!`);
+
+      const details = state.eyeAnalyses
+        .map(
+          (ea) => `
+          <div class="result-item">
+            <strong>Face #${ea.faceIndex} Eye Biometrics:</strong>
+            <div style="margin-top: 4px;"><strong>IPD (Pupil Distance):</strong> <span style="color: #38bdf8; font-weight: 700;">${ea.interpupillaryDistance} px</span></div>
+            <div><strong>Eye Line Tilt:</strong> ${ea.eyeTiltAngleDeg}°</div>
+            <div><strong>Eye State:</strong> <span style="color: #34d399; font-weight: 600;">${ea.eyeState}</span></div>
+            <div style="font-size: 0.75rem; color: #94a3b8; margin-top: 4px;">
+              Left Eye: (${Math.round(ea.leftEye.x)}, ${Math.round(ea.leftEye.y)}) | Right Eye: (${Math.round(ea.rightEye.x)}, ${Math.round(ea.rightEye.y)})
+            </div>
+          </div>
+        `
+        )
+        .join('');
+
+      const modesHtml = `
+        <div style="display: flex; gap: 0.4rem; margin-bottom: 0.75rem; flex-wrap: wrap;">
+          <button class="btn btn-secondary btn-sm" id="btnEyeReticles">Biometric Reticles</button>
+          <button class="btn btn-secondary btn-sm" id="btnEyeGlowingIris">Glowing Irises</button>
+          <button class="btn btn-secondary btn-sm" id="btnEyePrivacyBar">Privacy Censor</button>
+        </div>
+        ${details}
+      `;
+
+      showResultsPanel('Biometric Eye Detection', modesHtml);
+
+      document.getElementById('btnEyeReticles')?.addEventListener('click', () => {
+        state.eyeRenderMode = 'reticles';
+        redrawCanvas();
+        showToast('Active: Biometric Eye Reticles');
+      });
+
+      document.getElementById('btnEyeGlowingIris')?.addEventListener('click', () => {
+        state.eyeRenderMode = 'glowing_iris';
+        redrawCanvas();
+        showToast('Active: Glowing Iris Effect');
+      });
+
+      document.getElementById('btnEyePrivacyBar')?.addEventListener('click', () => {
+        state.eyeRenderMode = 'privacy_bar';
+        redrawCanvas();
+        showToast('Active: Privacy Eye Censor Bar');
+      });
+    } else {
+      showToast('No eyes detected. Ensure a face is visible.');
+      showResultsPanel(
+        'Eye Detection',
+        '<div class="result-item">Could not locate eye coordinates. Try a photo with a clearer front-facing subject.</div>'
+      );
     }
   });
 
