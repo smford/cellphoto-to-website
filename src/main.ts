@@ -7,6 +7,12 @@ import { detectObjects } from './services/objectDetector';
 import { extractPaletteFromImageData } from './services/colorExtractor';
 import { applySobelFilter, applyDocumentScanFilter, pixelateFaces, drawFaceCircles, type DetectedFace } from './services/imageFilters';
 import { extractPhotoMetadata, type PhotoMetadata } from './services/exifReader';
+import { analyzeImageQuality } from './services/imageDiagnostics';
+import { simulateColorDeficiency, type ColorDeficiencyType } from './services/colorSimulator';
+import { applyPortraitBokeh } from './services/portraitBokeh';
+import { drawARProps, type ARPropType } from './services/arProps';
+import { calculateAvatarCrop } from './services/smartCrop';
+import { detectTextRegions } from './services/textDetector';
 
 // UI State
 interface AppState {
@@ -16,6 +22,8 @@ interface AppState {
   exifData: PhotoMetadata | null;
   activeFeature: string | null;
   privacyBlurEnabled: boolean;
+  currentARProp: ARPropType;
+  currentColorDeficiency: ColorDeficiencyType;
 }
 
 const state: AppState = {
@@ -25,6 +33,8 @@ const state: AppState = {
   exifData: null,
   activeFeature: 'faces',
   privacyBlurEnabled: false,
+  currentARProp: 'sunglasses',
+  currentColorDeficiency: 'deuteranopia',
 };
 
 // Services
@@ -78,7 +88,7 @@ if (userRole === 'camera' && targetSession) {
 }
 
 // --------------------------------------------------------------------------
-// 2. MOBILE REMOTE CAMERA MODE
+// 2. MOBILE REMOTE CAMERA MODE (With Rear / Front Camera Switch)
 // --------------------------------------------------------------------------
 async function initMobileRemoteMode(sessionId: string) {
   desktopApp.style.display = 'none';
@@ -88,13 +98,24 @@ async function initMobileRemoteMode(sessionId: string) {
   const mobileCameraVideo = document.getElementById('mobileCameraVideo') as HTMLVideoElement;
   const btnMobileShutter = document.getElementById('btnMobileShutter')!;
   const btnMobileFlipCamera = document.getElementById('btnMobileFlipCamera')!;
+  const btnMobileCameraPill = document.getElementById('btnMobileCameraPill')!;
+  const mobileCameraLabel = document.getElementById('mobileCameraLabel')!;
   const mobileFileInput = document.getElementById('mobileFileInput') as HTMLInputElement;
   const mobileTransferOverlay = document.getElementById('mobileTransferOverlay')!;
   const mobileTransferProgress = document.getElementById('mobileTransferProgress')!;
 
-  // 1. Initialize mobile camera (rear camera ideal)
+  const updateCameraLabel = (mode: 'user' | 'environment') => {
+    if (mode === 'user') {
+      mobileCameraLabel.textContent = '🤳 Front Camera (Selfie)';
+    } else {
+      mobileCameraLabel.textContent = '📸 Rear Camera';
+    }
+  };
+
+  // 1. Initialize mobile camera (rear camera ideal on start)
   try {
     await cameraManager.start(mobileCameraVideo, 'environment');
+    updateCameraLabel('environment');
   } catch (err) {
     console.error('Camera access failed:', err);
     remotePeerStatus.textContent = 'Camera blocked. Use camera roll below.';
@@ -111,6 +132,20 @@ async function initMobileRemoteMode(sessionId: string) {
     console.error('P2P connection error:', err);
     remotePeerStatus.textContent = 'Connection failed. Re-scan QR code.';
   }
+
+  // Switch camera handler (works from bottom flip button OR top indicator pill)
+  const handleToggleCamera = async () => {
+    try {
+      const nextMode = await cameraManager.toggleCamera(mobileCameraVideo);
+      updateCameraLabel(nextMode);
+    } catch (e) {
+      console.error('Failed to toggle camera:', e);
+      alert('Could not switch camera.');
+    }
+  };
+
+  btnMobileFlipCamera.addEventListener('click', handleToggleCamera);
+  btnMobileCameraPill?.addEventListener('click', handleToggleCamera);
 
   const sendImage = async (dataUrl: string) => {
     mobileTransferOverlay.style.display = 'flex';
@@ -140,10 +175,6 @@ async function initMobileRemoteMode(sessionId: string) {
       console.error(e);
       alert('Could not capture photo. Try choosing from camera roll.');
     }
-  });
-
-  btnMobileFlipCamera.addEventListener('click', async () => {
-    await cameraManager.toggleCamera(mobileCameraVideo);
   });
 
   mobileFileInput.addEventListener('change', async (e) => {
@@ -185,7 +216,7 @@ async function setupWebRTC() {
       currentSessionId = id;
       console.log('WebRTC session ready:', currentSessionId);
       webrtcStatusBadge.className = 'status-badge online';
-      webrtcStatusText.textContent = 'P2P Ready';
+      webrtcStatusText.textContent = `P2P Ready (${id.slice(0, 8)})`;
 
       // Generate Mobile URL
       const currentUrl = new URL(window.location.href);
@@ -469,13 +500,15 @@ async function runFaceDetection() {
       showToast(`Detected ${state.detectedFaces.length} face(s)!`);
       showResultsPanel(
         'Detected Faces',
-        state.detectedFaces.map(
-          (f, idx) =>
-            `<div class="result-item">
-              <strong>Face #${idx + 1}</strong>: ${Math.round(f.confidence * 100)}% confidence
-              <br><span style="font-size: 0.75rem; color: #94a3b8;">Bounds: [${Math.round(f.boundingBox.x)}, ${Math.round(f.boundingBox.y)}, ${Math.round(f.boundingBox.width)} × ${Math.round(f.boundingBox.height)}]</span>
-            </div>`
-        ).join('')
+        state.detectedFaces
+          .map(
+            (f, idx) =>
+              `<div class="result-item">
+                <strong>Face #${idx + 1}</strong>: ${Math.round(f.confidence * 100)}% confidence
+                <br><span style="font-size: 0.75rem; color: #94a3b8;">Bounds: [${Math.round(f.boundingBox.x)}, ${Math.round(f.boundingBox.y)}, ${Math.round(f.boundingBox.width)} × ${Math.round(f.boundingBox.height)}]</span>
+              </div>`
+          )
+          .join('')
       );
     } else {
       showToast('No faces discovered in this photo.');
@@ -511,6 +544,11 @@ function redrawCanvas() {
       accentColor: '#3b82f6',
     });
   }
+
+  // Draw AR Props if active
+  if (state.activeFeature === 'ar_props' && state.detectedFaces.length > 0) {
+    drawARProps(canvasCtx, state.detectedFaces, state.currentARProp);
+  }
 }
 
 function showResultsPanel(title: string, htmlContent: string) {
@@ -533,6 +571,13 @@ function setupStudioInteractions() {
 
   const btnDetectFace = document.getElementById('btnDetectFace')!;
   const btnPrivacyBlur = document.getElementById('btnPrivacyBlur')!;
+  const btnARProps = document.getElementById('btnARProps')!;
+  const btnSmartCrop = document.getElementById('btnSmartCrop')!;
+
+  const btnQualityDiagnostics = document.getElementById('btnQualityDiagnostics')!;
+  const btnPortraitBokeh = document.getElementById('btnPortraitBokeh')!;
+  const btnDetectText = document.getElementById('btnDetectText')!;
+  const btnColorSimulator = document.getElementById('btnColorSimulator')!;
   const btnDetectQR = document.getElementById('btnDetectQR')!;
   const btnDetectObjects = document.getElementById('btnDetectObjects')!;
   const btnExtractPalette = document.getElementById('btnExtractPalette')!;
@@ -584,6 +629,260 @@ function setupStudioInteractions() {
     showToast(state.privacyBlurEnabled ? 'Privacy blur applied to faces!' : 'Privacy blur removed.');
   });
 
+  // Feature: AR Face Props
+  btnARProps.addEventListener('click', async () => {
+    state.activeFeature = 'ar_props';
+    if (state.detectedFaces.length === 0) {
+      await runFaceDetection();
+    } else {
+      redrawCanvas();
+    }
+
+    const props: { id: ARPropType; label: string }[] = [
+      { id: 'sunglasses', label: '🕶️ Cyberpunk Neon Glasses' },
+      { id: 'crown', label: '👑 Golden Crown' },
+      { id: 'party_hat', label: '🥳 Party Hat' },
+      { id: 'halo', label: '😇 Golden Halo' },
+    ];
+
+    const html = `
+      <p style="margin-bottom: 0.5rem;">Select an AR prop to align onto detected faces:</p>
+      <div style="display: flex; flex-direction: column; gap: 0.4rem;">
+        ${props
+          .map(
+            (p) => `
+          <button class="btn btn-secondary btn-sm" style="text-align: left; justify-content: flex-start;" id="prop_${p.id}">
+            ${p.label}
+          </button>
+        `
+          )
+          .join('')}
+      </div>
+    `;
+
+    showResultsPanel('Augmented Reality Props', html);
+
+    props.forEach((p) => {
+      document.getElementById(`prop_${p.id}`)?.addEventListener('click', () => {
+        state.currentARProp = p.id;
+        redrawCanvas();
+        showToast(`Applied ${p.label}!`);
+      });
+    });
+  });
+
+  // Feature: Smart Avatar Crop
+  btnSmartCrop.addEventListener('click', () => {
+    state.activeFeature = 'smart_crop';
+    renderOriginalCanvas();
+
+    const crop = calculateAvatarCrop(photoCanvas.width, photoCanvas.height, state.detectedFaces[0]);
+
+    // Draw crop reticle
+    canvasCtx.save();
+    canvasCtx.strokeStyle = '#38bdf8';
+    canvasCtx.lineWidth = 4;
+    canvasCtx.setLineDash([12, 6]);
+    canvasCtx.strokeRect(crop.x, crop.y, crop.width, crop.height);
+
+    // Darken exterior area
+    canvasCtx.fillStyle = 'rgba(0, 0, 0, 0.5)';
+    canvasCtx.fillRect(0, 0, photoCanvas.width, crop.y);
+    canvasCtx.fillRect(0, crop.y, crop.x, crop.height);
+    canvasCtx.fillRect(crop.x + crop.width, crop.y, photoCanvas.width - (crop.x + crop.width), crop.height);
+    canvasCtx.fillRect(0, crop.y + crop.height, photoCanvas.width, photoCanvas.height - (crop.y + crop.height));
+    canvasCtx.restore();
+
+    // Create avatar preview canvas
+    const avatarCanvas = document.createElement('canvas');
+    avatarCanvas.width = 400;
+    avatarCanvas.height = 400;
+    const avCtx = avatarCanvas.getContext('2d')!;
+    avCtx.drawImage(state.originalImage!, crop.x, crop.y, crop.width, crop.height, 0, 0, 400, 400);
+
+    const avatarDataUrl = avatarCanvas.toDataURL('image/png');
+
+    showResultsPanel(
+      'Smart Portrait Avatar (1:1)',
+      `
+      <div class="result-item" style="text-align: center;">
+        <img src="${avatarDataUrl}" style="width: 140px; height: 140px; border-radius: 50%; border: 3px solid #38bdf8; margin: 0 auto 0.75rem; display: block; object-fit: cover;">
+        <p style="font-size: 0.8rem; color: #94a3b8; margin-bottom: 0.5rem;">Optimal 1:1 circular crop centered on facial geometry.</p>
+        <button class="btn btn-primary btn-sm" id="btnDownloadAvatar">
+          Download 1:1 Avatar
+        </button>
+      </div>
+    `
+    );
+
+    document.getElementById('btnDownloadAvatar')?.addEventListener('click', () => {
+      const a = document.createElement('a');
+      a.download = `avatar-${Date.now()}.png`;
+      a.href = avatarDataUrl;
+      a.click();
+      showToast('Downloaded square avatar!');
+    });
+
+    showToast('Calculated smart avatar crop!');
+  });
+
+  // Feature: Focus Sharpness & Blur Diagnostics
+  btnQualityDiagnostics.addEventListener('click', () => {
+    state.activeFeature = 'diagnostics';
+    renderOriginalCanvas();
+
+    const imgData = canvasCtx.getImageData(0, 0, photoCanvas.width, photoCanvas.height);
+    const diag = analyzeImageQuality(imgData);
+
+    const scoreColor =
+      diag.sharpnessGrade === 'Crisp & Sharp'
+        ? '#34d399'
+        : diag.sharpnessGrade === 'Moderate Focus'
+        ? '#f59e0b'
+        : '#ef4444';
+
+    const html = `
+      <div class="result-item">
+        <strong>Focus Sharpness:</strong>
+        <span style="color: ${scoreColor}; font-weight: 700; margin-left: 4px;">${diag.sharpnessGrade}</span>
+        <div style="font-size: 0.75rem; color: #94a3b8; margin-top: 2px;">Laplacian Variance Score: ${diag.sharpnessScore}</div>
+      </div>
+
+      <div class="result-item">
+        <strong>Exposure Balance:</strong> ${diag.exposureGrade}
+        <div style="font-size: 0.75rem; color: #94a3b8; margin-top: 2px;">Avg Luminance: ${diag.averageLuminance} / 255 | Contrast: ${diag.contrastRatio}:1</div>
+      </div>
+
+      <div class="result-item">
+        <strong>Dynamic Range Clipping:</strong>
+        <div style="font-size: 0.75rem; color: #94a3b8; margin-top: 2px;">
+          Clipped Shadows: ${diag.shadowClippingPct}% | Clipped Highlights: ${diag.highlightClippingPct}%
+        </div>
+      </div>
+    `;
+
+    showResultsPanel('Image Quality Diagnostics', html);
+    showToast(`Sharpness Score: ${diag.sharpnessScore} (${diag.sharpnessGrade})`);
+  });
+
+  // Feature: Portrait Bokeh Blur (f/1.4)
+  btnPortraitBokeh.addEventListener('click', async () => {
+    state.activeFeature = 'bokeh';
+    showCanvasLoading('Rendering synthetic bokeh lens blur...');
+
+    try {
+      if (state.detectedFaces.length === 0) {
+        state.detectedFaces = await detectFaces(state.originalImage!);
+      }
+
+      const bokehCanvas = applyPortraitBokeh(photoCanvas, state.detectedFaces, 16);
+      canvasCtx.clearRect(0, 0, photoCanvas.width, photoCanvas.height);
+      canvasCtx.drawImage(bokehCanvas, 0, 0);
+
+      showResultsPanel(
+        'Portrait Depth Bokeh',
+        `
+        <div class="result-item">
+          Applied synthetic depth-of-field blur with focal center on detected subject. Simulates a large aperture portrait lens (f/1.4).
+        </div>
+      `
+      );
+      showToast('Rendered portrait bokeh blur!');
+    } finally {
+      hideCanvasLoading();
+    }
+  });
+
+  // Feature: Text Detection
+  btnDetectText.addEventListener('click', () => {
+    state.activeFeature = 'text';
+    renderOriginalCanvas();
+
+    const imgData = canvasCtx.getImageData(0, 0, photoCanvas.width, photoCanvas.height);
+    const textBlocks = detectTextRegions(imgData);
+
+    if (textBlocks.length > 0) {
+      canvasCtx.save();
+      canvasCtx.strokeStyle = '#f59e0b';
+      canvasCtx.lineWidth = 3;
+
+      textBlocks.forEach((tb) => {
+        canvasCtx.strokeRect(tb.x, tb.y, tb.width, tb.height);
+      });
+      canvasCtx.restore();
+
+      showResultsPanel(
+        'Detected Text Regions',
+        `
+        <p style="margin-bottom: 0.5rem;">Discovered ${textBlocks.length} text region(s):</p>
+        ${textBlocks
+          .map(
+            (tb, i) => `
+          <div class="result-item">
+            <strong>Block #${i + 1}</strong>: ~${tb.estimatedLines} line(s) of text
+            <br><span style="font-size: 0.75rem; color: #94a3b8;">${tb.width} × ${tb.height} px at (${tb.x}, ${tb.y})</span>
+          </div>
+        `
+          )
+          .join('')}
+      `
+      );
+      showToast(`Discovered ${textBlocks.length} text regions!`);
+    } else {
+      showResultsPanel('Text Detection', '<div class="result-item">No dense text blocks found in this image.</div>');
+      showToast('No text blocks found.');
+    }
+  });
+
+  // Feature: Color Blindness Simulator
+  btnColorSimulator.addEventListener('click', () => {
+    state.activeFeature = 'color_sim';
+
+    const renderSimulation = (type: ColorDeficiencyType) => {
+      renderOriginalCanvas();
+      const rawData = canvasCtx.getImageData(0, 0, photoCanvas.width, photoCanvas.height);
+      const simulated = simulateColorDeficiency(rawData, type);
+      canvasCtx.putImageData(simulated, 0, 0);
+    };
+
+    renderSimulation(state.currentColorDeficiency);
+
+    const options: { id: ColorDeficiencyType; label: string; desc: string }[] = [
+      { id: 'deuteranopia', label: 'Deuteranopia', desc: 'Green-blind (most common, ~6% males)' },
+      { id: 'protanopia', label: 'Protanopia', desc: 'Red-blind (~2% males)' },
+      { id: 'tritanopia', label: 'Tritanopia', desc: 'Blue-yellow deficiency (<0.1%)' },
+      { id: 'achromatopsia', label: 'Achromatopsia', desc: 'Complete color blindness (monochrome)' },
+    ];
+
+    const html = `
+      <p style="margin-bottom: 0.5rem;">Simulate how color vision deficient viewers see this photo:</p>
+      <div style="display: flex; flex-direction: column; gap: 0.4rem;">
+        ${options
+          .map(
+            (opt) => `
+          <button class="btn btn-secondary btn-sm" style="text-align: left; justify-content: flex-start; display: block;" id="sim_${opt.id}">
+            <strong>${opt.label}</strong>
+            <div style="font-size: 0.7rem; color: #94a3b8;">${opt.desc}</div>
+          </button>
+        `
+          )
+          .join('')}
+      </div>
+    `;
+
+    showResultsPanel('Color Blindness Simulator', html);
+
+    options.forEach((opt) => {
+      document.getElementById(`sim_${opt.id}`)?.addEventListener('click', () => {
+        state.currentColorDeficiency = opt.id;
+        renderSimulation(opt.id);
+        showToast(`Simulating ${opt.label}!`);
+      });
+    });
+
+    showToast('Applied color vision simulation!');
+  });
+
   // Feature: QR & Barcode Detection
   btnDetectQR.addEventListener('click', async () => {
     state.activeFeature = 'qr';
@@ -595,7 +894,6 @@ function setupStudioInteractions() {
       if (barcodes.length > 0) {
         showToast(`Discovered ${barcodes.length} barcode/QR code!`);
 
-        // Draw bounding boxes on canvas
         canvasCtx.lineWidth = 4;
         canvasCtx.strokeStyle = '#10b981';
         barcodes.forEach((b) => {
@@ -638,7 +936,6 @@ function setupStudioInteractions() {
       if (objects.length > 0) {
         showToast(`Detected ${objects.length} object(s)!`);
 
-        // Draw bounding boxes & labels
         objects.forEach((obj, idx) => {
           const colors = ['#f59e0b', '#ec4899', '#8b5cf6', '#06b6d4', '#10b981'];
           const color = colors[idx % colors.length];
@@ -648,7 +945,6 @@ function setupStudioInteractions() {
           canvasCtx.lineWidth = 3;
           canvasCtx.strokeRect(obj.boundingBox.x, obj.boundingBox.y, obj.boundingBox.width, obj.boundingBox.height);
 
-          // Label
           const label = `${obj.label} (${Math.round(obj.confidence * 100)}%)`;
           canvasCtx.font = '600 14px system-ui';
           canvasCtx.fillStyle = color;
@@ -712,7 +1008,6 @@ function setupStudioInteractions() {
     renderOriginalCanvas();
 
     const rawData = canvasCtx.getImageData(0, 0, photoCanvas.width, photoCanvas.height);
-    // Apply Sobel or Document Scan
     const filtered = applySobelFilter(rawData);
     canvasCtx.putImageData(filtered, 0, 0);
 

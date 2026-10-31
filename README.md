@@ -3,9 +3,9 @@
 [![Deploy to GitHub Pages](https://github.com/smford/cellphoto-to-website/actions/workflows/deploy.yml/badge.svg)](https://github.com/smford/cellphoto-to-website/actions/workflows/deploy.yml)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](https://opensource.org/licenses/MIT)
 
-> A modern, zero-backend, client-side web application hosted on **GitHub Pages**. Explore how photos can be acquired by a browser—including instant, encrypted **peer-to-peer WebRTC DataChannel transfer from a phone or tablet**—and what computer vision and AI detections can run directly in the user's browser.
+> A zero-backend, client-side web application hosted on **GitHub Pages**. Explore how photos can be acquired by a browser—including instant, encrypted **peer-to-peer WebRTC DataChannel transfer from a phone or tablet with front/rear camera switching**—and explore cutting-edge computer vision and AI detections running 100% locally in-browser.
 
-🔗 **Live Application**: [https://smford.github.io/cellphoto-to-website/](https://smford.github.io/cellphoto-to-website/) (or [http://stephenford.org/cellphoto-to-website/](http://stephenford.org/cellphoto-to-website/))
+🔗 **Live Application**: [http://stephenford.org/cellphoto-to-website/](http://stephenford.org/cellphoto-to-website/) (or [https://smford.github.io/cellphoto-to-website/](https://smford.github.io/cellphoto-to-website/))
 
 ---
 
@@ -17,23 +17,36 @@
 - **Phone / Tablet Remote (WebRTC P2P DataChannel)**:
   - Generates a QR code containing an encrypted room session.
   - Scanning the QR code on a mobile device or tablet opens a dedicated touch-friendly mobile camera remote.
+  - **Front / Rear Camera Switching**: Easily toggle between the Rear Camera and Front / Selfie Camera directly from the bottom control bar or the header status pill, with automatic selfie mirror preview.
   - Photos are chunked and transmitted in real-time directly over an encrypted WebRTC SCTP DataChannel (DTLS-SRTP end-to-end encrypted) straight onto your desktop canvas. No photos touch any server or cloud storage!
 
-### 2. In-Browser Computer Vision & Detections
+### 2. In-Browser Computer Vision & Detection Showcase
 All detections run **100% locally on the client machine** using WebAssembly, WebGL, and browser APIs:
 - 🎯 **Face Detection & Circular Reticles**:
   - Automatically identifies faces using MediaPipe Tasks Vision and the native Shape Detection API.
   - Draws glowing circular reticles and boundary circles around discovered faces with confidence metrics and key landmark points (eyes, nose, mouth).
   - **Privacy Face Blur**: One-click pixelation/anonymization filter for detected faces.
+- 🕶️ **Augmented Reality Face Props**:
+  - Automatically aligns and overlays vector accessories onto discovered faces: **Cyberpunk Neon Sunglasses 🕶️**, **Golden Crown 👑**, **Party Hat 🥳**, and **Golden Halo 😇**.
+- 📐 **Smart Portrait Avatar Crop (1:1)**:
+  - Computes golden-ratio, rule-of-thirds centered 1:1 square profile crops for any detected face with 1-click download.
+- 🔍 **Focus Sharpness & Blur Diagnostics (Laplacian Variance)**:
+  - Production-grade computer vision sharpness evaluation using 3×3 Laplacian convolution variance.
+  - Evaluates focus quality (*"Crisp & Sharp"* vs *"Soft / Motion Blurred"*), exposure grade, and dynamic range histogram.
+- 🎨 **Synthetic Portrait Bokeh Lens Blur ($f/1.4$)**:
+  - Applies a feathered focal depth-of-field blur outside the detected subject, simulating an open-aperture portrait prime lens.
+- 📄 **Optical Text & Receipt Block Detection**:
+  - Detects printed and written text zones using horizontal edge gradient density clustering.
+- 👁️ **Color Vision Deficiency (Accessibility Simulator)**:
+  - Real-time simulation of color blindness: **Deuteranopia** (green-blind), **Protanopia** (red-blind), **Tritanopia** (blue-blind), and **Achromatopsia** (monochromacy).
 - 📱 **QR & Barcode Scanning**:
   - Decodes QR codes, Data Matrix, UPC/EAN, and Code 128 from photos using native `BarcodeDetector` with `jsQR` fallback.
-  - Displays decoded URLs/text with one-click copy to clipboard.
-- 🏷️ **Object Detection**:
+- 🏷️ **Everyday Object Detection**:
   - Recognizes common everyday objects (people, laptops, mobile phones, chairs, cups, etc.) with localized bounding boxes.
 - 🎨 **Dominant Color Palette Extractor**:
-  - Runs in-browser k-means clustering to compute the top 6 dominant colors, their distribution percentage, and hex codes.
+  - In-browser k-means clustering algorithm to compute the top 6 dominant colors, distribution percentage, and hex codes.
 - 📄 **Document Scanner & Sobel Edge Convolution**:
-  - Applies a 3x3 Sobel convolution gradient filter or adaptive thresholding to convert photos into crisp scanned documents.
+  - 3×3 Sobel convolution gradient filter and adaptive document binarization for document capture.
 - ℹ️ **EXIF & Camera Metadata Inspector**:
   - Parses camera make, model, lens, exposure time, aperture (f-number), ISO, focal length, capture timestamp, and GPS coordinates via `exifr`.
 
@@ -56,11 +69,6 @@ All detections run **100% locally on the client machine** using WebAssembly, Web
 
 ## 🚀 Local Development
 
-### Prerequisites
-- Node.js >= 18
-- npm >= 9
-
-### Quick Start
 ```bash
 # Clone the repository
 git clone git@github.com:smford/cellphoto-to-website.git
@@ -74,14 +82,6 @@ npm test
 
 # Start local development server
 npm run dev
-```
-
-Open [http://localhost:5173](http://localhost:5173) in your browser.
-
-### Building for Production
-```bash
-npm run build
-npm run preview
 ```
 
 ---
